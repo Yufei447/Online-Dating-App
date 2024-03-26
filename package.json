@@ -1,0 +1,15 @@
+{
+  "name": "onlinedatingapp",
+  "version": "1.0.0",
+  "description": "Online Dating App",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "author": "Kate",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.19.2",
+    "express-handlebars": "^7.1.2"
+  }
+}
