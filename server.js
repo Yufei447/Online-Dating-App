@@ -1,5 +1,5 @@
 const express = require('express');
-const handlebars = require('handlebars')
+const handlebars = require('handlebars');
 const exphbs = require('express-handlebars');
 const { allowInsecurePrototypeAccess } = require('@handlebars/allow-prototype-access')
 const bodyParser = require('body-parser');
@@ -9,14 +9,23 @@ const cookieParser = require('cookie-parser');
 const session = require('express-session');
 const flash = require('connect-flash');
 const bcrypt = require('bcryptjs');
+const formidable = require('formidable');
+const app = express();
+const port = process.env.PORT || 3000;
+
 // Load models
 const Message = require('./models/message');
 const User = require('./models/user');
-const app = express();
 // load keys file
 const Keys = require('./config/keys');
 // Load helpers
 const {requireLogin, ensureGuest} = require('./helpers/auth');
+const {uploadImage} = require('./helpers/aws');
+// load facebook strategy
+require('./passport/facebook');
+require('./passport/local');
+
+
 // use body parser middleware
 app.use(bodyParser.urlencoded({extended:false}));
 app.use(bodyParser.json());
@@ -29,6 +38,7 @@ app.use(session({
 }));
 app.use(passport.initialize());
 app.use(passport.session());
+// signup message prompt
 app.use(flash());
 app.use((req,res,next)=> {
     res.locals.success_msg = req.flash('success_msg');
@@ -43,23 +53,23 @@ app.use((req,res,next) => {
     res.locals.user = req.user || null;
     next();
 });
-// load facebook strategy
-require('./passport/facebook');
-require('./passport/local');
+
+
 // connect to mLab MongoDB
 mongoose.connect(Keys.MongoDB).then(() => {
     console.log('Server is connected to MongoDB');
 }).catch((err) => {
     console.log(err);
 });
-// environment var for port
-const port = process.env.PORT || 3000;
+
 // setup a view engine
 app.engine('handlebars', exphbs.engine({
     defaultLayout:'main',
     handlebars: allowInsecurePrototypeAccess(handlebars)
 }));
 app.set('view engine', 'handlebars');
+
+
 
 app.get('/', ensureGuest,(req, res) => {
     res.render('home', {
@@ -86,6 +96,7 @@ app.get('/auth/facebook/callback', passport.authenticate('facebook', {
     successRedirect: '/profile',
     failureRedirect: '/'
 }));
+
 app.get('/profile', requireLogin, (req,res) => {
     User.findById({_id:req.user._id}).then((user) => {
         if (user) {
@@ -103,6 +114,7 @@ app.get('/profile', requireLogin, (req,res) => {
         }
     });
 });
+
 app.get('/newAccount', (req,res) => {
     res.render('newAccount', {
         title: 'Signup'
@@ -150,7 +162,7 @@ app.post('/signup', (req,res) => {
                     let success = [];
                     success.push({text: 'Your account has been successfully created. You can login now'});
                     res.render('home', {
-                    success: success
+                        success: success
                     });
                 })
                 .catch(err => {
@@ -160,10 +172,12 @@ app.post('/signup', (req,res) => {
         });
     }
 });
+
 app.post('/login', passport.authenticate('local',{
     successRedirect: '/profile',
     failureRedirect: '/loginErrors'
 }));
+
 app.get('/loginErrors', (req,res) => {
     let errors = [];
     errors.push({text:'User Not found or Password Incorrect'})
@@ -171,6 +185,43 @@ app.get('/loginErrors', (req,res) => {
         errors: errors
     });
 });
+
+app.get('/uploadImage',(req,res)=>{
+    res.render('uploadImage',{
+        title:'Upload'
+    });
+});
+// update the image property of the user in mongoDB database
+app.post('/uploadAvatar', (req,res)=>{
+    User.findById({_id:req.user_id})
+    .then((user) => {
+        user.image = `https://online-dating-app-bucket.s3.amazonaws.com/${req.body.upload}`;
+        user.save((err) => {
+            if (err){
+                throw err;
+            }else{
+                res.redirect('/profile');
+            }
+        });
+    });
+});
+
+app.post('/uploadFile',uploadImage.any(),(req,res) => {
+    // parse image of form type using formidable
+    const form = new formidable.IncomingForm();
+    // when receive the file, the callback function will be filed
+    form.on('file', (field,file) => {
+        console.log(file);
+    });
+    form.on('error', (err) => {
+        console.log(err);
+    });
+    form.on('end',() => {
+        console.log('Image upload is successful ..');
+    });
+    form.parse(req);
+});
+
 app.get('/logout',(req,res)=>{
     User.findById({_id:req.user._id})
     .then((user) => {

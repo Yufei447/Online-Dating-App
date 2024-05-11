@@ -1,5 +1,6 @@
 module.exports = {
     requireLogin: (req,res,next) => {
+        // user is logged in
         if (req.isAuthenticated()){
             return next();
         }else{
