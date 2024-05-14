@@ -119,12 +119,28 @@ app.get('/profile', requireLogin, (req,res) => {
                         {sender:req.user._id,senderRead:false}
                     ]})
                     .then((unread) => {
-                        res.render('profile',{
-                            title: 'Profile',
-                            user: user,
-                            newSmile: newSmile,
-                            unread:unread
-                         });
+                        Post.find({postUser:req.user._id})
+                           .populate('postUser')
+                           .sort({date:'desc'})
+                           .then((posts) => {
+                               if (posts) {
+                                  res.render('profile',{
+                                      title: 'Profile',
+                                      user: user,
+                                      newSmile: newSmile,
+                                      unread:unread,
+                                      posts:posts
+                                    });
+                               }else{
+                                   console.log('User does not have any posts');
+                                   res.render('profile',{
+                                       title: 'Profile',
+                                       user: user,
+                                       newSmile: newSmile,
+                                       unread:unread
+                                    });
+                               }
+                           })
                     })
                 })
                 
@@ -711,7 +727,99 @@ app.get('/displayPostForm',requireLogin,(req,res) => {
     res.render('post/displayPostForm',{
         title: 'Post'
     });
-});
+})
+app.post('/createPost',requireLogin,(req,res) => {
+    let allowComments = Boolean;
+    if (req.body.allowComments) {
+        allowComments = true;
+    }else{
+        allowComments = false;
+    }
+    const newPost = {
+        title: req.body.title,
+        body: req.body.body,
+        status: req.body.status,
+        image: `https://online-dating-app-bucket.s3.amazonaws.com/${req.body.image}`,
+        postUser: req.user._id,
+        allowComments: allowComments,
+        date: new Date()
+    }
+    if (req.body.status === 'public') {
+        newPost.icon = 'fa fa-globe';
+    }
+    if (req.body.status === 'private') {
+        newPost.icon = 'fa fa-key';
+    }
+    if (req.body.status === 'friends') {
+        newPost.icon = 'fa fa-group';
+    }
+    new Post(newPost).save()
+    .then(() => {
+        if (req.body.status === 'public') {
+            res.redirect('/posts');
+        }else{
+            res.redirect('/profile');
+        }
+    })
+})
+// DISPLAY ALL PUBLIC POSTS
+app.get('/posts',requireLogin,(req,res) => {
+    Post.find({status:'public'})
+    .populate('postUser')
+    .sort({date:'desc'})
+    .then((posts) => {
+        res.render('post/posts',{
+            title:'Posts',
+            posts:posts
+        })
+    })
+})
+app.get('/deletePost/:id',requireLogin,(req,res) => {
+    Post.deleteOne({_id:req.params.id})
+    .then(() => {
+        res.redirect('/profile');
+    })
+})
+app.get('/editPost/:id',requireLogin,(req,res) => {
+    Post.findById({_id:req.params.id})
+    .then((post) => {
+        res.render('post/editPost',{
+            title:'Editing',
+            post:post
+        })
+    })
+})
+app.post('/editPost/:id',requireLogin,(req,res) => {
+    Post.findByIdAndUpdate({_id:req.params.id})
+    .then((post) => {
+        let allowComments = Boolean;
+        if (req.body.allowComments) {
+            allowComments = true;
+        }else{
+            allowComments = false;
+        }
+        post.title = req.body.title;
+        post.body = req.body.body;
+        post.status = req.body.status;
+        post.allowComments = allowComments;
+        post.image = `https://online-dating-app.s3.ap-south-1.amazonaws.com/${req.body.image}`;
+        post.date = new Date()
+
+        if (req.body.status === 'public') {
+            post.icon = 'fa fa-globe';
+        }
+        if (req.body.status === 'private') {
+            post.icon = 'fa fa-key';
+        }
+        if (req.body.status === 'friends') {
+            post.icon = 'fa fa-group';
+        }
+        post.save()
+        .then(() => {
+            res.redirect('/profile');
+        })
+    })
+})
 app.get('/logout',(req,res)=>{
     User.findById({_id:req.user._id})
     .then((user) => {
