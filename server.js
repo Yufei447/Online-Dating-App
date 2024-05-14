@@ -705,8 +705,13 @@ app.post('/charge40dollars',requireLogin,(req,res) => {
     }).catch((err) => {
         console.log(err);
     })
-})
+});
 
+app.get('/displayPostForm',requireLogin,(req,res) => {
+    res.render('post/displayPostForm',{
+        title: 'Post'
+    });
+});
 app.get('/logout',(req,res)=>{
     User.findById({_id:req.user._id})
     .then((user) => {
