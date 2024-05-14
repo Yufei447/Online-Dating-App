@@ -7,3 +7,46 @@
 .red{
     color: red;
 }
+.fa-edit{
+    cursor: pointer;
+    color: blue;
+    margin-right: 10px;
+}
+.fa-trash{
+    color: red;
+}
+a:visited{
+    margin-right: 10px;
+}
+.col-sm-3{
+    margin: 5px 5px 5px 5px;
+}
+.chatroom-users{
+    width: 64px;
+   height: 64px; 
+}
+#messages{
+    height: 300px;
+    overflow: scroll;
+}
+.right{
+    float: right;
+}
+.single-icons{
+    margin-top: 10px;
+}
+.col-sm-3{
+    border: 1px solid black;
+    padding: 5px 5px 5px 5px;
+}
+#main-body{
+    margin-bottom: 60px;
+    margin-top: 80px;
+}
+.payment{
+    background-color: black;
+    color: aliceblue;
+    margin: 5px 5px 5px 5px;
+    padding: 10px 10px 10px 10px;
+    border: 2px solid red;
+}

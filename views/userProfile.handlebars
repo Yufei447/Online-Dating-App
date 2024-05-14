@@ -1,0 +1,33 @@
+<div class="card" style="width: 18rem;">
+    <img src="{{oneUser.image}}" class="card-img-top" alt="...">
+    <div class="card-body">
+        <h5 class="card-title">{{oneUser.fullname}}</h5>
+
+        <a href="/startChat/{{oneUser._id}}" class="btn btn-primary">
+            <i class="fa fa-commenting"></i>
+        </a>
+
+        {{!-- display different color based on whther receives new smile or not --}}
+        {{#if smile}}
+        <a href="/deleteSmile/{{oneUser._id}}" class="btn btn-danger">
+             <i class="fa fa-smile-o new smile"></i>
+        </a>
+        <script>
+            $(document).ready(function(){
+                    setInterval(function(){
+                    $('.newsmile').attr('style','color:white');
+                    },10)
+                    setInterval(function(){
+                        $('.newsmile').attr('style','color:red');
+                    },30)
+                })
+        </script>
+        {{else}}
+        <a href="/sendSmile/{{oneUser._id}}" class="btn btn-outline-danger">
+            <i class="fa fa-smile-o"></i>
+        </a>
+        {{/if}}
+
+    </div>
+ </div>
+        

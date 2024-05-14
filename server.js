@@ -1,5 +1,5 @@
 const express = require('express');
-const handlebars = require('handlebars');
+const Handlebars = require('handlebars');
 const exphbs = require('express-handlebars');
 const { allowInsecurePrototypeAccess } = require('@handlebars/allow-prototype-access')
 const bodyParser = require('body-parser');
@@ -16,11 +16,17 @@ const port = process.env.PORT || 3000;
 // Load models
 const Message = require('./models/message');
 const User = require('./models/user');
+const Chat = require('./models/chat');
+const Smile = require('./models/smile');
+const Post = require('./models/post');
 // load keys file
 const Keys = require('./config/keys');
+const stripe = require('stripe')(Keys.StripeSecretkey);
 // Load helpers
 const {requireLogin, ensureGuest} = require('./helpers/auth');
 const {uploadImage} = require('./helpers/aws');
+const {getLastMoment} = require('./helpers/moment');
+const {walletChecker} = require('./helpers/wallet');
 // load facebook strategy
 require('./passport/facebook');
 require('./passport/local');
@@ -65,8 +71,10 @@ mongoose.connect(Keys.MongoDB).then(() => {
 // setup a view engine
 app.engine('handlebars', exphbs.engine({
     defaultLayout:'main',
-    handlebars: allowInsecurePrototypeAccess(handlebars)
-}));
+    helpers: {
+        getLastMoment:getLastMoment
+    },
+    handlebars: allowInsecurePrototypeAccess(Handlebars)}));
 app.set('view engine', 'handlebars');
 
 
@@ -103,15 +111,62 @@ app.get('/profile', requireLogin, (req,res) => {
             user.online = true;
             user.save()
             .then(savedUser => {
-                res.render('profile', {
-                title: 'Profile',
-                user: savedUser
-                });
+                // Display smile notification
+                Smile.findOne({receiver:req.user._id,receiverReceived:false})
+                .then((newSmile) => {
+                    Chat.findOne({$or:[
+                        {receiver:req.user._id,receiverRead:false},
+                        {sender:req.user._id,senderRead:false}
+                    ]})
+                    .then((unread) => {
+                        res.render('profile',{
+                            title: 'Profile',
+                            user: user,
+                            newSmile: newSmile,
+                            unread:unread
+                         });
+                    })
+                })
+                
             })
             .catch(err => {
                 throw err;
             });
         }
+    });
+});
+app.post('/updateProfile',requireLogin,(req,res) => {
+    User.findById({_id:req.user._id})
+    .then((user) => {
+        user.fullname = req.body.fullname;
+        user.email = req.body.email;
+        user.gender = req.body.gender;
+        user.about = req.body.about;
+        // user.save(() => {
+        //     res.redirect('/profile');
+        // });
+        user.save()
+        .then(() => {
+            res.redirect('/profile');
+        })
+        .catch(err => {
+            throw err;
+        });
+
+    });
+});
+
+app.get('/askToDelete',requireLogin,(req,res) => {
+    res.render('askToDelete',{
+        title: 'Delete'
+    });
+});
+app.get('/deleteAccount',requireLogin,(req,res) => {
+    User.deleteOne({_id:req.user._id})
+    .then(() => {
+        res.render('accountDeleted',{
+            title:'Deleted'
+        });
     });
 });
 
@@ -186,13 +241,13 @@ app.get('/loginErrors', (req,res) => {
     });
 });
 
-app.get('/uploadImage',(req,res)=>{
+app.get('/uploadImage',requireLogin,(req,res)=>{
     res.render('uploadImage',{
         title:'Upload'
     });
 });
 // update the image property of the user in mongoDB database
-app.post('/uploadAvatar', (req,res)=>{
+app.post('/uploadAvatar',requireLogin,(req,res)=>{
     User.findById({_id:req.user_id})
     .then((user) => {
         user.image = `https://online-dating-app-bucket.s3.amazonaws.com/${req.body.upload}`;
@@ -206,7 +261,7 @@ app.post('/uploadAvatar', (req,res)=>{
     });
 });
 
-app.post('/uploadFile',uploadImage.any(),(req,res) => {
+app.post('/uploadFile',requireLogin,uploadImage.any(),(req,res) => {
     // parse image of form type using formidable
     const form = new formidable.IncomingForm();
     // when receive the file, the callback function will be filed
@@ -221,6 +276,436 @@ app.post('/uploadFile',uploadImage.any(),(req,res) => {
     });
     form.parse(req);
 });
+
+app.get('/singles',requireLogin,(req,res) => {
+    User.find({})
+    .sort({date:'desc'})
+    .then((singles) => {
+        res.render('singles',{
+            title:'Singles',
+            singles:singles
+        })
+    }).catch((err) => {
+        console.log(err);
+    });
+});
+app.get('/userProfile/:id',requireLogin,(req,res) => {
+    User.findById({_id:req.params.id})
+    .then((user) => {
+        Smile.findOne({receiver:req.params.id})
+        .then((smile) => {
+            res.render('userProfile',{
+                title:'Profile',
+                oneUser: user,
+                smile:smile
+            });
+        })
+    });
+});
+
+// Start chat process
+app.get('/startChat/:id',requireLogin,(req,res) => {
+    // Check if the id sends messages before or not, in this case, id is the sender
+    // <receiver> is the current login user
+    Chat.findOne({sender:req.params.id,receiver:req.user._id})
+    .then((chat) => {
+        // chat exists before
+        if (chat){
+            chat.receiverRead = true;
+            // send back new message
+            chat.senderRead = false;
+            chat.date = new Date();
+            chat.save()
+            .then(chat => {
+                if (chat) {
+                    res.redirect(`/chat/${chat._id}`);
+                }
+            })
+            .catch(err => {
+                throw err;
+            });
+        }else{
+            // Current user is the <sender>
+            Chat.findOne({sender:req.user._id,receiver:req.params.id})
+            .then((chat) => {
+                if (chat) {
+                    chat.senderRead = true;
+                    chat.reciverRead = false;
+                    chat.date = new Date();
+                    chat.save()
+                    .then(chat => {
+                        if (chat) {
+                            res.redirect(`/chat/${chat._id}`);
+                        }
+                    })
+                    .catch(err => {
+                        throw err;
+                    });
+                }
+                else{
+                    // New conversation
+                    const newChat = {
+                        sender: req.user._id,
+                        receiver: req.params.id,
+                        senderRead: true,
+                        receiverRead: false,
+                        date: new Date()
+                    }
+                    new Chat(newChat).save()
+                    .then(chat => {
+                        if (chat) {
+                            res.redirect(`/chat/${chat._id}`);
+                        }
+                    })
+                    .catch(err => {
+                        throw err;
+                    });
+                }
+            })
+        }
+    })
+})
+// Display Chat Room
+app.get('/chat/:id([0-9a-f]{24})',requireLogin,(req,res) => {
+    Chat.findById({_id:req.params.id})
+    .populate('sender')
+    .populate('receiver')
+    .populate('chats.senderName')
+    .populate('chats.receiverName')
+    .then((chat) => {
+        User.findOne({_id:req.user._id})
+        .then((user) => {
+            res.render('chatRoom',{
+                title: 'Chat',
+                user:user,
+                chat:chat
+            })
+        })
+    })
+})
+app.post('/chat/:id([0-9a-f]{24})',requireLogin,walletChecker,(req,res) => {
+    Chat.findOne({_id:req.params.id,sender:req.user._id})
+    .sort({date:'desc'})
+    .populate('sender')
+    .populate('receiver')
+    .populate('chats.senderName')
+    .populate('chats.receiverName')
+    .then((chat) => {
+        if (chat) {
+            // sender sends message
+            chat.senderRead = true;
+            chat.receiverRead = false;
+            chat.date = new Date();
+
+            const newChat = {
+                senderName:req.user._id,
+                senderRead: true,
+                receiverName: chat.receiver._id,
+                receiverRead: false,
+                date: new Date(),
+                senderMessage: req.body.chat
+            }
+            chat.chats.push(newChat)
+            chat.save()
+            .then(chat => {
+                if (chat) {
+                    Chat.findOne({_id:chat._id})
+                    .sort({date:'desc'})
+                    .populate('sender')
+                    .populate('receiver')
+                    .populate('chats.senderName')
+                    .populate('chats.receiverName')
+                    .then((chat) => {
+                        User.findById({_id:req.user._id})
+                        .then((user) => {
+                            // we will charge client for each message
+                            user.wallet = user.wallet - 1;
+                            user.save()
+                            .then(user => {
+                                if (user) {
+                                    res.render('chatRoom',{
+                                        title:'Chat',
+                                        chat:chat,
+                                        user:user
+                                    })
+                                }
+                            })
+                        })
+                    })
+                }
+            })
+            .catch(err => {
+                throw err;
+            })
+        }else{
+            // receiver sends message back
+            Chat.findOne({_id:req.params.id,receiver:req.user._id})
+            .sort({date:'desc'})
+            .populate('sender')
+            .populate('receiver')
+            .populate('chats.senderName')
+            .populate('chats.receiverName')
+            .then((chat) => {
+                chat.senderRead = true;
+                chat.reciverRead = false;
+                chat.date = new Date();
+                const newChat = {
+                    senderName: chat.sender._id,
+                    senderRead: false,
+                    receiverName: req.user._id,
+                    reciverRead: true,
+                    receiverMessage: req.body.chat,
+                    date: new Date()
+                }
+                chat.chats.push(newChat)
+                chat.save()
+                .then(chat => {
+                    if (chat) {
+                        Chat.findOne({_id:chat._id})
+                        .sort({date:'desc'})
+                        .populate('sender')
+                        .populate('receiver')
+                        .populate('chats.senderName')
+                        .populate('chats.receiverName')
+                        .then((chat) => {
+                            User.findById({_id:req.user._id})
+                            .then((user) => {
+                                // we will charge client for each message
+                                user.wallet = user.wallet - 1;
+                                user.save()
+                                .then(user => {
+                                    if (user) {
+                                        res.render('chatRoom',{
+                                            title:'Chat',
+                                            chat:chat,
+                                            user:user
+                                        })
+                                    }
+                                })
+                            })
+                        })
+                    }
+                })
+                .catch(err => {
+                    throw err;
+                })
+            })
+        }
+    })
+})
+
+app.get('/sendSmile/:id',requireLogin,(req,res) => {
+    const newSmile = {
+        sender: req.user._id,
+        receiver: req.params.id,
+        senderSent: true
+    }
+    new Smile(newSmile).save()
+    .then(smile => {
+        res.redirect(`/userProfile/${req.params.id}`);
+    })
+    .catch(err => {
+        throw err;
+    });
+})
+app.get('/deleteSmile/:id',requireLogin,(req,res) => {
+    Smile.deleteOne({receiver:req.params.id,sender:req.user._id})
+    .then(() => {
+        res.redirect(`/userProfile/${req.params.id}`);
+    })
+})
+// show simle sender
+app.get('/showSmile/:id',requireLogin,(req,res) => {
+    Smile.findOne({_id:req.params.id})
+    .populate('sender')
+    .populate('receiver')
+    .then((smile) => {
+        smile.receiverReceived = true;
+        smile.save()
+        .then((smile) => {
+            res.render('smile/showSmile', {
+                title: 'NewSmile',
+                smile: smile
+            })
+        })
+        .catch(err => {
+            throw err;
+        });
+        
+    })
+})
+
+app.get('/chats',requireLogin,(req,res) => {
+    Chat.find({receiver:req.user._id})
+    .populate('sender')
+    .populate('receiver')
+    .populate('chats.senderName')
+    .populate('chats.receiverName')
+    .sort({date:'desc'})
+    .then((received) => {
+        Chat.find({sender:req.user._id})
+        .populate('sender')
+        .populate('receiver')
+        .populate('chats.senderName')
+        .populate('chats.receiverName')
+        .sort({date:'desc'})
+        .then((sent) => {
+            res.render('chat/chats',{
+                title: 'Chat History',
+                received:received,
+                sent:sent
+            })
+        })
+    })
+})
+app.get('/deleteChat/:id',requireLogin,(req,res) => {
+    Chat.deleteOne({_id:req.params.id})
+    .then(() => {
+        res.redirect('/chats');
+    });
+});
+
+app.post('/charge10dollars',requireLogin,(req,res) => {
+    console.log(req.body);
+    const amount = 1000;
+    stripe.customers.create({
+        email:req.body.stripeEmail,
+        source: req.body.stripeToken
+    }).then((customer) => {
+        return stripe.paymentIntents.create({
+            amount:1000,
+            description: '$10 for 20 messages',
+            currency: 'usd',
+            payment_method_types:['card'],
+            customer:customer.id,
+            receipt_email:customer.email
+        }).then((charge) => {
+            if (charge) {
+                User.findById({_id:req.user._id})
+                .then((user) => {
+                    user.wallet += 20;
+                    user.save()
+                    .then(() => {
+                        res.render('success',{
+                            title:'Success',
+                            charge:charge
+                        })
+                    })
+                })
+            }
+        }).catch((err) => {
+            console.log(err);
+        })
+    }).catch((err) => {
+        console.log(err);
+    })
+})
+app.post('/charge20dollars',requireLogin,(req,res) => {
+    console.log(req.body);
+    const amount = 2000;
+    stripe.customers.create({
+        email:req.body.stripeEmail,
+        source: req.body.stripeToken
+    }).then((customer) => {
+        return stripe.paymentIntents.create({
+            amount:2000,
+            description: '$20 for 50 messages',
+            currency: 'usd',
+            payment_method_types:['card'],
+            customer:customer.id,
+            receipt_email:customer.email
+        }).then((charge) => {
+            if (charge) {
+                User.findById({_id:req.user._id})
+                .then((user) => {
+                    user.wallet +=50;
+                    user.save()
+                    .then(() => {
+                        res.render('success',{
+                            title:'Success',
+                            charge:charge
+                        })
+                    })
+                })
+            }
+        }).catch((err) => {
+            console.log(err);
+        })
+    }).catch((err) => {
+        console.log(err);
+    })
+})
+app.post('/charge30dollars',requireLogin,(req,res) => {
+    console.log(req.body);
+    const amount = 3000;
+    stripe.customers.create({
+        email:req.body.stripeEmail,
+        source: req.body.stripeToken
+    }).then((customer) => {
+        return stripe.paymentIntents.create({
+            amount:3000,
+            description: '$30 for 100 messages',
+            currency: 'usd',
+            payment_method_types:['card'],
+            customer:customer.id,
+            receipt_email:customer.email
+        }).then((charge) => {
+            if (charge) {
+                User.findById({_id:req.user._id})
+                .then((user) => {
+                    user.wallet +=100;
+                    user.save()
+                    .then(() => {
+                        res.render('success',{
+                            title:'Success',
+                            charge:charge
+                        })
+                    })
+                })
+            }
+        }).catch((err) => {
+            console.log(err);
+        })
+    }).catch((err) => {
+        console.log(err);
+    })
+})
+// Charge 40 dollars
+app.post('/charge40dollars',requireLogin,(req,res) => {
+    console.log(req.body);
+    const amount = 4000;
+    stripe.customers.create({
+        email:req.body.stripeEmail,
+        source: req.body.stripeToken
+    }).then((customer) => {
+        return stripe.paymentIntents.create({
+            amount:4000,
+            description: '$40 for 200 messages',
+            currency: 'usd',
+            payment_method_types:['card'],
+            customer:customer.id,
+            receipt_email:customer.email
+        }).then((charge) => {
+            if (charge) {
+                User.findById({_id:req.user._id})
+                .then((user) => {
+                    user.wallet +=200;
+                    user.save()
+                    .then(() => {
+                        res.render('success',{
+                            title:'Success',
+                            charge:charge
+                        })
+                    })
+                })
+            }
+        }).catch((err) => {
+            console.log(err);
+        })
+    }).catch((err) => {
+        console.log(err);
+    })
+})
 
 app.get('/logout',(req,res)=>{
     User.findById({_id:req.user._id})
