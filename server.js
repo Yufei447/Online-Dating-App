@@ -255,7 +255,41 @@ app.get('/loginErrors', (req,res) => {
     res.render('home', {
         errors: errors
     });
+})
+
+app.get('/retrievePwd',(req,res) => {
+    res.render('retrievePwd',{
+        title: 'Retrieve'
+    })
 });
+app.post('/retrievePwd',(req,res) => {
+    let email = req.body.email.trim();
+    let pwd1 = req.body.password.trim();
+    let pwd2 = req.body.password2.trim();
+
+    if (pwd1 !== pwd2) {
+        res.render('pwdDoesNotMatch',{
+            title:'Not match'
+        })
+    }
+
+    User.findOne({email:email})
+    .then((user) => {
+        let salt = bcrypt.genSaltSync(10);
+        let hash = bcrypt.hashSync(pwd1,salt);
+
+        user.password = hash;
+        user.save()
+        .then((user) => {
+            res.render('pwdUpdated',{
+                title:'Updated'
+            })
+        })
+        .catch((err) => {
+            throw err;
+        })
+    })
+})
 
 app.get('/uploadImage',requireLogin,(req,res)=>{
     res.render('uploadImage',{
@@ -264,16 +298,16 @@ app.get('/uploadImage',requireLogin,(req,res)=>{
 });
 // update the image property of the user in mongoDB database
 app.post('/uploadAvatar',requireLogin,(req,res)=>{
-    User.findById({_id:req.user_id})
+    User.findById({_id:req.user._id})
     .then((user) => {
         user.image = `https://online-dating-app-bucket.s3.amazonaws.com/${req.body.upload}`;
-        user.save((err) => {
-            if (err){
-                throw err;
-            }else{
-                res.redirect('/profile');
-            }
-        });
+        user.save()
+        .then((user) => {
+            res.redirect('/profile');
+        })
+        .catch((err) => {
+            throw err;
+        })
     });
 });
 
@@ -310,11 +344,18 @@ app.get('/userProfile/:id',requireLogin,(req,res) => {
     .then((user) => {
         Smile.findOne({receiver:req.params.id})
         .then((smile) => {
-            res.render('userProfile',{
-                title:'Profile',
-                oneUser: user,
-                smile:smile
-            });
+            Post.find({status:'public',postUser:user._id})
+           .populate('postUser')
+           .populate('comments.commentUser')
+           .populate('likes.likeUser')
+           .then((publicPosts) => {
+               res.render('userProfile',{
+                   title:'Profile',
+                   oneUser: user,
+                   smile:smile,
+                   publicPosts:publicPosts
+               });
+           })
         })
     });
 });
@@ -817,6 +858,56 @@ app.post('/editPost/:id',requireLogin,(req,res) => {
         post.save()
         .then(() => {
             res.redirect('/profile');
+        })
+    })
+})
+// When user click like of a post, push the user into the post's like's array
+app.get('/likePost/:id',requireLogin,(req,res) => {
+    Post.findById({_id:req.params.id})
+    .then((post) => {
+        const newLike = {
+            likeUser: req.user._id,
+            date: new Date()
+        }
+        post.likes.push(newLike)
+        post.save()
+        .then(post => {
+            res.redirect(`/fullPost/${post._id}`);
+        })
+        .catch((err) => {
+            throw err;
+        })
+    })
+})
+app.get('/fullpost/:id',requireLogin,(req,res) => {
+    Post.findById({_id:req.params.id})
+    .populate('postUser')
+    .populate('likes.likeUser')
+    .populate('comments.commentUser')
+    .sort({date:'desc'})
+    .then((post) => {
+        res.render('post/fullpost',{
+            title:'Full Post',
+            post:post
+        })
+    })
+})
+// Submit form to leave comment
+app.post('/leaveComment/:id',requireLogin,(req,res) => {
+    Post.findById({_id:req.params.id})
+    .then((post) => {
+        const newComment = {
+            commentUser: req.user._id,
+            commentBody: req.body.commentBody,
+            date: new Date()
+        }
+        post.comments.push(newComment)
+        post.save()
+        .then((post) => {
+            res.redirect(`/fullpost/${post._id}`);
+        })
+        .catch((err) => {
+            throw err;
         })
     })
 })

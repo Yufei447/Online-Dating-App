@@ -8,19 +8,19 @@
         <br>
         <small>{{getLastMoment date 'hour'}}</small>
         <br>
-        {{!-- <h4>
+        <h4>
             <a href="/likePost/{{_id}}">
             <i class="fa fa-thumbs-up post-icons">Like</i>
             </a>
 
             {{#if allowComments}}
             <a href="/fullpost/{{_id}}">
-            <i class="fa fa-comments-o post-icons"> Comment</i>
+            <i class="fa fa-comments post-icons"> Comment</i>
             </a>
             {{else}}
             <p class="red">Comment is not allowed</p>
             {{/if}}
-        </h4> --}}
+        </h4>
 
         <br>
         <a href="/fullPost/{{_id}}">View More</a>

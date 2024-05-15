@@ -18,12 +18,13 @@
         },10)
         setInterval(function(){
           $('.fa-smile-o').attr('style','color:white');
-        },30)
+        })
       })
     </script>
     {{else}}
-    <a class="navbar-brand" href="#">{{{title}}}</a>
+
     {{/if}}
+    
 
     {{#if unread}}
     <a href="/chats" class="navbar-brand">
@@ -40,6 +41,7 @@
       })
     </script>
     {{/if}}
+    <a class="navbar-brand" href="#">{{title}}</a>
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent" aria-controls="navbarSupportedContent" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>

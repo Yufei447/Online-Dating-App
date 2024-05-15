@@ -11,6 +11,7 @@ $(document).ready(function(){
         // get the image
         var formData = new FormData();
         formData.append('upload',uploadInput[0].files[0]);
+        // console.log(formData)
 
         // send iamge to route '/uploadFile'
         $.ajax({
@@ -27,6 +28,6 @@ $(document).ready(function(){
     });
 });
 // Make chatRoom autoscroll
-// $(document).ready(function(){
-//   $('#messages').animate({scrollTop:100000},800);
-// });
+$(document).ready(function(){
+  $('#messages').animate({scrollTop:100000},800);
+});
