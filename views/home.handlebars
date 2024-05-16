@@ -5,11 +5,12 @@
 <div class="row">
     <div class="col-sm"></div>
    <div class="col-sm-4">
-        <h1 class="center">
+        <br>
+        {{!-- <h1 class="center">
             <a href="/auth/facebook">
             <button type="button" class="btn btn-primary btn-lg btn-facebook">
                     <i class="fa fa-facebook"></i> Login with Facebook</button>
-        </h1>
+        </h1> --}}
 
         {{!-- <h1 class="center">
             <a href="/auth/google">
@@ -17,7 +18,7 @@
             </a>
         </h1> --}}
         
-        <p class="center">or</p>
+        {{!-- <p class="center">or</p> --}}
         <form action="/login" method="POST">
         {{#each success}}
         <p class="green">{{text}}</p>

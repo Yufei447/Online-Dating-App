@@ -15,6 +15,7 @@
     <p class="card-text"><i class="fa fa-envelope"></i>{{ user.email }}</p>
     <p class="card-text"><i class="fa fa-mars"> {{ user.gender}}</i></p>
     <p class="card-text"><i class="fa fa-id-card">{{ user.about}}</i></p>
+    <p class="card-text"><i class="fa fa-credit-card">{{ user.wallet}}</i> messages left</p>
     <hr>
     <h5>
       <i onclick="editProfile()" class="fa fa-edit"> Edit </i>
@@ -42,6 +43,26 @@
     </form>
   </div>
 </div>
+<hr>
+<h2 class="center">My friends</h2>
+
+<div class="row">
+{{#each user.friends}}
+<div class="col-sm">
+  <div class="card">
+    <img src="{{friend.image}}" class="card-img-top img-fluid">
+    <div class="card-body">
+      <h5 class="card-title">{{friend.fullname}}</h5>
+      <a href="/userProfile/{{friend._id}}"
+        class="btn btn-primary">View Profile</a>
+    </div>
+  </div>
+</div>
+{{else}}
+<p>You have no friends..</p>
+{{/each}}
+</div>
+
 <hr>
 <div class="container">
   <h2 class="center">My Posts</h2>

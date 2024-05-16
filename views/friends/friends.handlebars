@@ -1,0 +1,20 @@
+<div class="row">
+{{#each userFriends}}
+{{#each friends}}
+{{#if isFriend}}
+<div class="col-sm">
+    <div class="card">
+    <img src="{{friend.image}}" class="card-img-top">
+    <div class="card-body">
+        <h5 class="card-title">{{friend.fullname}}</h5>
+        <a href="/userProfile/{{friend._id}}" class="btn btn-primary">View Profile</a>
+    </div>
+</div>
+</div>
+{{/if}}
+{{/each}}
+{{else}}
+<p>Friends Not Found ...</p>
+<a href="/singles" class="btn btn-danger">Find Friends</a>
+{{/each}}
+</div>

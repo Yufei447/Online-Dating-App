@@ -12,6 +12,8 @@ const bcrypt = require('bcryptjs');
 const formidable = require('formidable');
 const app = express();
 const port = process.env.PORT || 3000;
+const socket = require('socket.io');
+const http = require('http');
 
 // Load models
 const Message = require('./models/message');
@@ -106,7 +108,9 @@ app.get('/auth/facebook/callback', passport.authenticate('facebook', {
 }));
 
 app.get('/profile', requireLogin, (req,res) => {
-    User.findById({_id:req.user._id}).then((user) => {
+    User.findById({_id:req.user._id})
+    .populate('friends.friend')
+    .then((user) => {
         if (user) {
             user.online = true;
             user.save()
@@ -245,7 +249,7 @@ app.post('/signup', (req,res) => {
 });
 
 app.post('/login', passport.authenticate('local',{
-    successRedirect: '/profile',
+    successRedirect: '/askMore',
     failureRedirect: '/loginErrors'
 }));
 
@@ -255,6 +259,31 @@ app.get('/loginErrors', (req,res) => {
     res.render('home', {
         errors: errors
     });
+})
+// ask user to finish signup
+app.get('/askMore',(req,res) =>{
+    User.findById({_id:req.user._id})
+    .then((user) =>{
+      if (!user.gender || !user.age){
+          res.render('askMore',{
+            title: 'Finish',
+            user: user
+          })
+      }else{
+        res.redirect('/profile');
+      }
+    })
+})
+app.post('/askMore',requireLogin,(req,res) =>{
+    User.findById({_id:req.user._id})
+    .then((user) =>{
+      user.gender = req.body.gender;
+      user.age = req.body.age;
+      user.save()
+      .then(() =>{
+        res.redirect('/profile');
+      })
+    })
 })
 
 app.get('/retrievePwd',(req,res) => {
@@ -341,6 +370,7 @@ app.get('/singles',requireLogin,(req,res) => {
 });
 app.get('/userProfile/:id',requireLogin,(req,res) => {
     User.findById({_id:req.params.id})
+    .populate('friends.friend')
     .then((user) => {
         Smile.findOne({receiver:req.params.id})
         .then((smile) => {
@@ -910,7 +940,110 @@ app.post('/leaveComment/:id',requireLogin,(req,res) => {
             throw err;
         })
     })
+});
+
+app.get('/sendFriendRequest/:id', requireLogin,(req,res) => {
+    User.findOne({_id:req.params.id})
+    .then((user) => {
+        let newFriendRequest = {
+            friend: req.user._id
+        }
+        user.friends.push(newFriendRequest)
+        user.save()
+        .then((user) => {
+            res.render('friends/askFriendRequest', {
+                title: 'Request',
+                newFriend: user
+            })
+        })
+    })
 })
+app.get('/showFriendRequest/:id',requireLogin,(req,res) => {
+    User.findOne({_id:req.params.id})
+    .then((userRequest) => {
+        res.render('friends/showFriendRequest',{
+            title:'Request',
+            newFriend: userRequest
+        })
+    })
+})
+app.get('/acceptFriend/:id',requireLogin,(req,res) =>{
+    User.findById({_id:req.user._id})
+    .populate('friends.friend')
+      .then((user) =>{
+          user.friends.filter((friend) =>{
+            if (friend._id = req.params.id) {
+                friend.isFriend = true;
+                user.save()
+                .then(() =>{
+                  User.findById({_id:req.params.id})
+                  .then((requestSender) =>{
+                      let newFriend = {
+                        friend:req.user._id,
+                        isFriend: true
+                      }
+                      requestSender.friends.push(newFriend)
+                      requestSender.save()
+                      .then(() =>{
+                        User.findById({_id:req.user._id})
+                        .populate('friends.friend')
+                        .sort({date:'desc'})
+                        .then((user) =>{
+                            res.render('friends/friendAccepted', {
+                              title: 'Friends',
+                              userInfo:user
+                            })
+                        })
+                      })
+                  })
+                })
+            }else{
+              res.render('friends/404',{
+                title: 'Not Found'
+              })
+            }
+          })
+      }).catch((err) =>{
+        console.log(err);
+      })
+})
+
+app.get('/friends',requireLogin, (req,res) => {
+    User.findById({_id:req.user._id})
+    .populate('friends.friend')
+    .then((user) => {
+        res.render('friends/friends',{
+            title:'Friends',
+            userFriends:user
+        })
+    })
+})
+app.get('/rejectFriend/:id',requireLogin,(req,res) => {
+    User.findById({_id:req.user._id})
+    .populate('friends.friend')
+    .then((user) => {
+        user.friends.filter((friend) => {
+            if (friend._id = req.params.id) {
+                user.friends.pop(friend)
+                user.save()
+                .then(() => {
+                    User.findOne({_id:req.params.id})
+                    .then((friend) => {
+                        res.render('friends/rejectFriendRequest',{
+                            title: 'Rejected',
+                            friend:friend
+                        })
+                    })
+                })
+            }else{
+                res.render('friends/404',{
+                    title:'Not Found'
+                })
+            }
+        })
+    })
+})
+
 app.get('/logout',(req,res)=>{
     User.findById({_id:req.user._id})
     .then((user) => {
@@ -966,6 +1099,135 @@ app.post('/contactUs',(req,res) => {
     
 });
 
-app.listen(port, () => {
+
+
+// connect socket.io
+const server = http.createServer(app);
+const io = socket(server);
+
+io.on('connection',(socketio) =>{
+    console.log('Connected to Client');
+    
+    // emit event
+    // socketio.emit('newMessage', {
+    //     title: 'New Message',
+    //     body: 'Hello world',
+    //     sender: 'server'
+    // })
+
+    //listen to even "ID"
+    socketio.on('ID',(ID) => {
+        // console.log('User ID catched: ', ID);
+        User.findById({_id:ID.ID})
+        .then((currentUser) => {
+            User.findOne({email: 'admin@example.com'})
+            .then((admin) => {
+                if (admin){
+                    Chat.findOne({sender:currentUser._id, receiver: admin._id})
+                    .populate('sender')
+                    .populate('receiver')
+                    .populate('chats.senderName')
+                    .populate('chats.receiverName')
+                    .then((chat) => {
+                        if (chat) {
+                            if(chat.receiverRead === false){
+                                chat.receiverRead = true;
+                                chat.senderRead  = true;
+                                chat.save((chat) => {
+                                    console.log('Chat has been stopped by admin.')
+                                })
+                                .catch((err) => {
+                                    console.log(err);
+                                    throw err;
+                                })
+                            }
+                        }
+                        else{
+                            Chat.findOne({sender:admin._id, receiver: currentUser._id})
+                            .populate('sender')
+                            .populate('receiver')
+                            .populate('chats.senderName')
+                            .populate('chats.receiverName')
+                            .then((chat) => {
+                                if (chat) {
+                                    if(chat.senderRead === false){
+                                        chat.receiverRead = true;
+                                        chat.senderRead  = true;
+                                        chat.save()
+                                        .then((chat) => {
+                                            console.log('Admin received the message, chat stoppped.')
+                                        })
+                                        .catch((err) => {
+                                            console.log(err);
+                                            throw err;
+                                        })
+                                    }
+                                }
+                                else{
+                                    const chat = {
+                                        sender: admin._id,
+                                        receiver: currentUser._id,
+                                        senderRead: true
+                                    }
+                                    new Chat(chat).save()
+                                    .then((chat) => {
+                                        const newChat = {
+                                            senderName: admin._id,
+                                            senderMessage: 'Welcome to Online Dating Site, we are excited to see you here. Let us begin the new journey!',
+                                            receiverName: currentUser._id,
+                                            senderRead: true 
+                                        }
+                                        chat.chats.push(newChat)
+                                        chat.save()
+                                        .then((chat) => {
+                                            Chat.findOne({_id: chat._id})
+                                            .populate('sender')
+                                            .populate('receiver')
+                                            .populate('chats.senderName')
+                                            .populate('chats.receiverName')
+                                            .sort({date: 'desc'})})
+                                        .catch((err) => {
+                                            console.log(err);
+                                            throw err;
+                                        })
+                                    })
+
+                                }
+                            })
+                            .catch((err) => {
+                                console.log(err);
+                                // throw err;
+                            })
+                        }
+                    })
+                    .catch((err)=> {
+                        console.log(err);
+                        // throw err;
+                    })
+
+
+                }else{
+                    console.log('Unable to find Admin from MongoDB');
+                }
+            })
+            .catch((err) => {
+                console.log(err);
+                // throw err;
+            })
+        })
+        .catch((err) => {
+            console.log(err);
+            // throw err;
+        })
+    })
+
+});
+io.on('disconnection',()=>{
+    console.log('Disconnected from Client')
+})
+
+
+
+server.listen(port, () => {
     console.log(`Server is running on port ${port}`);
 });

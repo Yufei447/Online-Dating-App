@@ -41,6 +41,10 @@ a:visited{
     margin-bottom: 60px;
     margin-top: 80px;
 }
+body{
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 20px;
+}
 .payment{
     background-color: black;
     color: aliceblue;

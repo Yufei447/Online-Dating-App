@@ -26,6 +26,12 @@
             <i class="fa fa-smile-o"></i>
             </a>
             {{/if}}
+
+            <a href="/sendFriendRequest/{{oneUser._id}}">
+              <button class="btn btn-outline-success">
+                <i class="fa fa-user-plus"></i>
+              </button>
+            </a>
           </div>
     </div>
   </div>
@@ -42,7 +48,25 @@
   </div>
 </div>
 <hr>
+<h2 class="center">Friends</h2>
+<div class="row">
+{{#each oneUser.friends}}
+<div class="col-sm-2">
+  <div class="card">
+    <img src="{{friend.image}}" class="card-img-top img-fluid">
+    <div class="card-body">
+      <h5 class="card-title">{{friend.fullname}}</h5>
+      <a href="/userProfile/{{friend._id}}"
+        class="btn btn-primary">View Profile</a>
+    </div>
+  </div>
+</div>
+{{else}}
+<p>You have no friends..</p>
+{{/each}}
+</div>
 
+<hr>
  <div class="container">
   <h2 class="center">Public Posts</h2>
   {{#each publicPosts}}
