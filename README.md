@@ -22,5 +22,6 @@ HTML/CSS
 
 Here is an demo:
 
-![VID_20240517120812380](https://github.com/Yufei447/Online-Dating-App/assets/125088087/2ebb1680-6999-4e17-a8f4-1326f38f26b7)
+![Uploading VID_20240517120812380-ezgif.com-video-to-gif-converter (1).gif…]()
+
 
