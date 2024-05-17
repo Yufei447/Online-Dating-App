@@ -9,16 +9,15 @@ Users can upload pictures for profile, and share posts with images, which are st
 Website will be mobile friendly and responsive. If you open website from any mobile device, it will automatically adjust screen size based on device.
 
 The Tech Stack I used:
-Node.js
-Express.js
-jQuery
-AJAX
-Bootstrap
-MongoDB
-Chat Application
-AWS S3 storage
-Javascript 
-HTML/CSS
+ - Node.js
+ - Express.js
+ - jQuery
+ - AJAX
+ - Bootstrap
+ - MongoDB
+ - AWS S3 storage
+ - Javascript 
+ - HTML/CSS
 
 Here is an demo:
 
